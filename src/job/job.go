@@ -1,16 +1,15 @@
 package job
 
 type IJob interface {
-	Run() error
+	Run() (string, error)
+}
+
+type BuiltinJobRunner interface {
+	RunCommand() (string, error)
 }
 
 type Job struct {
 	Name string
-}
-
-type BuiltinJob struct {
-	Job
-	Params map[string]string
 }
 
 type FileJob struct {

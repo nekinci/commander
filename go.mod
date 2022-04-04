@@ -1,4 +1,4 @@
-module contineousdev
+module commander
 
 go 1.18
 

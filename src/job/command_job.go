@@ -1,6 +1,7 @@
 package job
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -34,8 +35,9 @@ func (c *CommandJob) Args() []string {
 	return c.CommandArgs[1:]
 }
 
-func (c *CommandJob) Run() error {
+func (c *CommandJob) Run() (string, error) {
 	cmd := exec.Command(c.Cmd(), c.Args()...)
-	_ = cmd
-	return nil
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	return string(out), err
 }
