@@ -3,6 +3,7 @@ package builtin_jobs
 import (
 	"commander/src/constant"
 	"commander/src/job"
+	"path/filepath"
 )
 
 type CopyBuiltinJob struct {
@@ -49,6 +50,9 @@ func (j *CopyBuiltinJob) RunCommand() (string, error) {
 	src := j.Source
 	dest := j.Dest
 	_, _ = src, dest
+
+	sourceAbs, err := filepath.Abs(src)
+	_ = sourceAbs
 
 	return "", nil
 }

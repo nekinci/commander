@@ -12,6 +12,17 @@ type InvalidDestError struct {
 	description string
 }
 
+type EnvVarNotFoundError struct {
+	error
+	envVarName string
+}
+
+func NewEnvVarNotFoundError(envVarName string) *EnvVarNotFoundError {
+	return &EnvVarNotFoundError{
+		envVarName: envVarName,
+	}
+}
+
 func NewInvalidSrcError(src, description string) *InvalidSrcError {
 	return &InvalidSrcError{src: src, description: description}
 }
@@ -26,4 +37,8 @@ func (e *InvalidSrcError) Error() string {
 
 func (e *InvalidDestError) Error() string {
 	return "Invalid destination: " + e.dest + " " + e.description
+}
+
+func (e *EnvVarNotFoundError) Error() string {
+	return "Environment variable not found: " + e.envVarName
 }

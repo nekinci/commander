@@ -1,18 +1,17 @@
 package main
 
 import (
+	"commander/src/osutil"
 	"fmt"
-	"os"
-	"path/filepath"
 )
 
 func main() {
-	src := "./src/a.yml"
-	abs, err := filepath.Abs(src)
+	src := "./src/main.go"
+	dst := "./dst/main.go.bak"
+
+	err := osutil.CopyAll(src, dst, false, true)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		fmt.Println(err)
 	}
-	dir := filepath.Dir(abs)
-	println(dir)
+
 }
