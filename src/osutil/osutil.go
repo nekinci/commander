@@ -1,7 +1,9 @@
 package osutil
 
 import (
+	"bytes"
 	"commander/src/constant"
+	"io"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -9,170 +11,235 @@ import (
 	"strings"
 )
 
+type FilterFunc func(fileName string) bool
+
 type Copy struct {
-	Src     string
-	Dst     string
-	Options CopyOptions
+	Source      string
+	Destination string
+	Options     *CopyOptions
+	sourceStat  os.FileInfo
+	destStat    os.FileInfo
 }
 
 type CopyOptions struct {
-	Recursive bool
-	CreateDir bool // If target directory does not exist, create it
-	Overwrite bool // If target file exists, overwrite it
-	Depth     int  // If recursive, maximum depth
+	Recursive     bool
+	Depth         *int         // nil means infinite depth
+	FileMode      *os.FileMode // nil means use default
+	DirectoryMode *os.FileMode // nil means use default
+	FilterFunc    FilterFunc
 }
 
-func CopyAll(src, dst string, recursive, createDir bool) error {
-
-	srcStat, srcErr := os.Lstat(src)
-	if srcErr != nil {
-		return srcErr
+func NewCopy(source, destination string, copyOptions *CopyOptions) *Copy {
+	return &Copy{
+		Source:      source,
+		Destination: destination,
+		Options:     copyOptions,
 	}
-
-	dstStat, dstErr := os.Lstat(dst)
-	if dstErr != nil {
-
-		if !createDir {
-			return dstErr
-		}
-
-		if srcStat.IsDir() {
-			if os.IsNotExist(dstErr) {
-				err := os.MkdirAll(dst, constant.DefaultDirPermission)
-				if err != nil {
-					return err
-				}
-				dstStat, err = os.Lstat(dst)
-				if err != nil {
-					return err
-				}
-			} else {
-				return dstErr
-			}
-		}
-
-	}
-
-	if srcStat.IsDir() && !dstStat.IsDir() {
-		return constant.NewInvalidDestError(dst, "Source is directory but destination is not. Cannot copy.")
-	}
-
-	return copyAll(src, dst, recursive)
 }
 
-func copyAll(src, dst string, recursive bool) error {
-	src, err := replaceEnvironmentVariables(src)
-
+func (c *Copy) Copy() error {
+	err := c.loadSourceStat()
 	if err != nil {
 		return err
 	}
 
-	src = addCurrentDirIfRequired(src)
+	return c.copy()
+}
 
-	dst, err = replaceEnvironmentVariables(dst)
+func (c *Copy) copy() error {
 
-	if err != nil {
-		return err
-	}
-
-	dst = addCurrentDirIfRequired(dst)
-
-	err = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-
+	return filepath.WalkDir(c.Source, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+
+		if err := c.validate(path); err != nil {
 			return err
 		}
 
 		if d.IsDir() {
 
-			commonPath := getCommonPath(src, path)
-			dstPath := filepath.Join(dst, commonPath)
-			dstPath = addCurrentDirIfRequired(dstPath)
+			destination := c.GetCalculatedDestination(path)
+			d := c.Options.getDepthLimit()
+			if d > getDepth(c.GetSource(), getPath(path)) || c.GetSource() == getPath(path) {
+				err := c.mkdirHelper(destination)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 
-			if !recursive && strings.Count(path, string(os.PathSeparator)) > 0 && src != path {
-				return fs.SkipDir
+		destination := c.GetCalculatedDestination(path)
+		if strings.HasSuffix(destination, string(os.PathSeparator)) {
+			if c.isDestinationDir() {
+				err := c.mkdirHelper(destination)
+				if err != nil {
+					return err
+				}
+				destination += d.Name()
+			} else {
+				destination = strings.TrimSuffix(destination, string(os.PathSeparator))
+				dir := filepath.Dir(destination)
+				err := os.MkdirAll(dir, c.Options.getDirectoryMode())
+				if err != nil {
+					return err
+				}
 			}
 
-			return os.MkdirAll(dstPath, constant.DefaultDirPermission)
+		}
 
-		} else {
+		source := getPath(path)
+		return copyFile(source, destination)
+	})
 
-			dir := filepath.Dir(dst)
-			dir = addCurrentDirIfRequired(dir)
-			err := os.MkdirAll(dir, constant.DefaultDirPermission)
+}
+
+// Only internal use
+func (c *Copy) mkdirHelper(destination string) error {
+	lstat, err := os.Lstat(destination)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(destination, c.Options.getDirectoryMode())
 			if err != nil {
 				return err
 			}
+
 		}
+		return err
+	}
 
-		commonPath := getCommonPath(src, path)
-
-		srcPath := filepath.Join(src, commonPath)
-		dstPath := filepath.Join(dst, commonPath)
-
-		return copy(srcPath, dstPath)
-
-	})
-	return err
+	if !lstat.IsDir() {
+		return os.ErrInvalid
+	}
+	return nil
 }
 
-func copy(source, destination string) error {
-	source = addCurrentDirIfRequired(source)
-	file, err := ioutil.ReadFile(source)
+func copyFile(src, dst string) error {
+	file, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	destination = addCurrentDirIfRequired(destination)
-	err = os.WriteFile(destination, file, constant.DefaultFilePermission)
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(dstFile, bytes.NewReader(file))
+	if err != nil {
+		return err
+	}
+
+	return dstFile.Close()
+
+}
+
+func (c *Copy) loadSourceStat() error {
+	stat, err := os.Lstat(c.Source)
+	c.sourceStat = stat
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func replaceEnvironmentVariables(path string) (string, error) {
-	elements := strings.Split(path, string(os.PathSeparator))
-	newElements := make([]string, 0)
-	for _, element := range elements {
-		if strings.HasPrefix(element, "$") {
-			envVar := strings.TrimPrefix(element, "$")
-			envVarValue := os.Getenv(envVar)
-			if envVarValue == "" {
-				return "", constant.NewEnvVarNotFoundError(envVar)
-			}
-			newElements = append(newElements, envVarValue)
-		} else if strings.HasPrefix(element, "~") {
-			dir, err := os.UserHomeDir()
-			if err != nil {
-				return "", err
-			}
-			newElements = append(newElements, dir)
-		} else if strings.HasPrefix(element, "%") && strings.HasSuffix(element, "%") {
-			envVar := strings.TrimPrefix(element, "%")
-			envVar = strings.TrimSuffix(envVar, "%")
-			envVarValue := os.Getenv(envVar)
-			if envVarValue == "" {
-				return "", constant.NewEnvVarNotFoundError(envVar)
-			}
-			newElements = append(newElements, envVarValue)
+// GetSource returns the source path as absolute path
+func (c *Copy) GetSource() string {
+	return getPath(c.Source)
+}
+
+// GetDestination returns the destination path as absolute path
+func (c *Copy) GetDestination() string {
+	return getPath(c.Destination)
+}
+
+func (c *Copy) GetCalculatedDestination(path string) string {
+	dest := c.GetDestination()
+	if strings.HasSuffix(dest, string(os.PathSeparator)) {
+		dest = dest + c.getCommonPath(path)
+	} else {
+		dest = dest + string(os.PathSeparator) + c.getCommonPath(path)
+	}
+
+	return dest
+}
+
+func (c *CopyOptions) getDepthLimit() int {
+	d := 0
+	if c.Recursive {
+		if c.Depth != nil {
+			d = *c.Depth
 		} else {
-			newElements = append(newElements, element)
+			d = -1
 		}
-
 	}
 
-	return filepath.Join(newElements...), nil
+	return d
 }
 
-func getCommonPath(src, path string) string {
-	srcReplace := strings.Replace(src, "./", "", 1)
-	res := strings.Replace(path, srcReplace, "", 1)
-	return res
-}
+func (c *Copy) validate(path string) error {
 
-func addCurrentDirIfRequired(src string) string {
-	if !strings.HasPrefix(src, "/") && !strings.HasPrefix(src, "./") {
-		src = "./" + src
+	d := c.Options.getDepthLimit()
+
+	if d == -1 {
+		return nil // there is no depth limit
+	} else if getDepth(c.GetSource(), getPath(path)) <= d {
+		return nil // the depth is within the limit
 	}
-	return src
+
+	return fs.SkipDir
+
+}
+
+func getPath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+
+	wd, _ := os.Getwd()
+	join := filepath.Join(wd, path)
+	if strings.HasSuffix(path, string(os.PathSeparator)) {
+		join += string(os.PathSeparator)
+	}
+	return join
+}
+
+// getDepth returns the depth of the current path.
+func getDepth(givenAbsolutePath, path string) int {
+	absoluteSlashCount := strings.Count(givenAbsolutePath, string(os.PathSeparator))
+	pathSlashCount := strings.Count(path, string(os.PathSeparator))
+	count := pathSlashCount - absoluteSlashCount
+	count = count - 1
+	if count == -1 {
+		count = 0
+	}
+	return count
+}
+
+func (c *Copy) isDestinationDir() bool {
+	return strings.HasSuffix(c.GetDestination(), string(os.PathSeparator))
+}
+
+func (c *Copy) getCommonPath(path string) string {
+	path = getPath(path)
+	replaced := strings.Replace(path, c.GetSource(), "", 1)
+	// if first character is path separator, remove it
+	if strings.HasPrefix(replaced, string(os.PathSeparator)) {
+		replaced = strings.TrimPrefix(replaced, string(os.PathSeparator))
+	}
+	return replaced
+}
+
+func (c *CopyOptions) getDirectoryMode() os.FileMode {
+	if c.DirectoryMode == nil {
+		return constant.DefaultDirPermission
+	}
+	return *c.DirectoryMode
+}
+
+func (c *CopyOptions) getFileMode() os.FileMode {
+	if c.FileMode == nil {
+		return constant.DefaultFilePermission
+	}
+	return *c.FileMode
 }

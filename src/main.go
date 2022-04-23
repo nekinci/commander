@@ -6,12 +6,20 @@ import (
 )
 
 func main() {
-	src := "./src/main.go"
-	dst := "./dst/main.go.bak"
-
-	err := osutil.CopyAll(src, dst, false, true)
-	if err != nil {
-		fmt.Println(err)
+	src := "./src"
+	dst := "./dst"
+	var i int = 2
+	co := osutil.CopyOptions{
+		Recursive:     true,
+		Depth:         &(i),
+		FileMode:      nil,
+		DirectoryMode: nil,
+		FilterFunc:    nil,
 	}
+
+	c := osutil.NewCopy(src, dst, &co)
+	_ = c
+
+	fmt.Println(c.Copy())
 
 }

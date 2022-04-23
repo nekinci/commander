@@ -6,4 +6,10 @@ The commander tool that lets build local pipelines based on declarative way.
 
 - [x] Init Project
 - [x] Decide structure of declarative yaml
-- [ ] Decide the actions
+- [x] Write copy functionality
+- [ ] Write tests
+- [ ] Write documentation
+- [ ] Setup CI/CD
+- [ ] Setup Docker
+- [ ] Publish with npm, brew, etc.
+- [ ] Write a blog post about it
