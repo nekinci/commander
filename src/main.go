@@ -3,12 +3,13 @@ package main
 import (
 	"commander/src/osutil"
 	"fmt"
+	"os"
 )
 
 func main() {
 	src := "./src"
 	dst := "./dst"
-	var i int = 2
+	var i int = 0
 	co := osutil.CopyOptions{
 		Recursive:     true,
 		Depth:         &(i),
@@ -20,6 +21,5 @@ func main() {
 	c := osutil.NewCopy(src, dst, &co)
 	_ = c
 
-	fmt.Println(c.Copy())
-
+	fmt.Println(os.Getenv("Niyazi"))
 }

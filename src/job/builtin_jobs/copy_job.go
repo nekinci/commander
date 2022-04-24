@@ -3,13 +3,18 @@ package builtin_jobs
 import (
 	"commander/src/constant"
 	"commander/src/job"
-	"path/filepath"
+	"commander/src/osutil"
+	"os"
 )
 
 type CopyBuiltinJob struct {
-	Job    *job.BuiltinJob
-	Source string
-	Dest   string
+	Job       *job.BuiltinJob
+	Source    string
+	Dest      string
+	Recursive bool
+	Depth     *int
+	FileMode  *os.FileMode
+	DirMode   *os.FileMode
 }
 
 func (j *CopyBuiltinJob) validate() error {
@@ -40,7 +45,7 @@ func (j *CopyBuiltinJob) validate() error {
 
 }
 
-func (j *CopyBuiltinJob) RunCommand() (string, error) {
+func (j *CopyBuiltinJob) RunJob() (string, error) {
 
 	err := j.validate()
 	if err != nil {
@@ -51,8 +56,13 @@ func (j *CopyBuiltinJob) RunCommand() (string, error) {
 	dest := j.Dest
 	_, _ = src, dest
 
-	sourceAbs, err := filepath.Abs(src)
-	_ = sourceAbs
-
-	return "", nil
+	options := osutil.CopyOptions{
+		Recursive:     j.Recursive,
+		Depth:         j.Depth,
+		FileMode:      j.FileMode,
+		DirectoryMode: j.DirMode,
+		FilterFunc:    nil, // TODO: implement filter func by incoming filter
+	}
+	c := osutil.NewCopy(src, dest, &options)
+	return "", c.Copy()
 }

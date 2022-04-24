@@ -7,16 +7,12 @@ import (
 )
 
 type CommandJob struct {
-	Job
 	Command     string
 	CommandArgs []string
 }
 
-func NewCommandJob(name, command string) *CommandJob {
+func NewCommandJob(id, name, command string) *CommandJob {
 	return &CommandJob{
-		Job: Job{
-			Name: name,
-		},
 		Command:     command,
 		CommandArgs: determineCommand(command),
 	}
