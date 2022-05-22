@@ -1,25 +1,49 @@
 package main
 
+import "C"
 import (
-	"commander/src/osutil"
-	"fmt"
-	"os"
+	"commander/src/job"
+	"commander/src/listener"
+	"commander/src/specification"
 )
 
 func main() {
-	src := "./src"
-	dst := "./dst"
-	var i int = 0
-	co := osutil.CopyOptions{
-		Recursive:     true,
-		Depth:         &(i),
-		FileMode:      nil,
-		DirectoryMode: nil,
-		FilterFunc:    nil,
+
+	ss := "touch a.txt"
+	ss1 := "echo 'hello world!'"
+	ss2 := "echo naber hello"
+	ss3 := "git status"
+	s := specification.Specification{
+		Version: "v1",
+		Name:    "Niyazi Test",
+
+		On: specification.On{
+			Change: specification.Change{
+				Files: []string{"./src"},
+			},
+			Save: specification.Change{
+				Files: []string{"./src"},
+			},
+			Delete: specification.Change{},
+			Create: specification.Create{},
+			Timer:  specification.Timer{},
+		},
+		Jobs: map[string]specification.Job{
+			"job": {
+				Id:   "new-job-1",
+				Name: "new-job-1",
+				Commands: []specification.Command{
+					{Params: nil, Uses: nil, Cmd: &ss, Name: "c1", Id: "c1"},
+					{Params: nil, Uses: nil, Cmd: &ss1, Name: "c2", Id: "c2"},
+					{Params: nil, Uses: nil, Cmd: &ss2, Name: "c2", Id: "c2"},
+					{Params: nil, Uses: nil, Cmd: &ss3, Name: "c2", Id: "c2"},
+				},
+			},
+		},
 	}
 
-	c := osutil.NewCopy(src, dst, &co)
-	_ = c
+	manager := job.NewManager(&s)
+	l := listener.New(&s, manager)
 
-	fmt.Println(os.Getenv("Niyazi"))
+	l.Listen()
 }

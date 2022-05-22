@@ -2,7 +2,6 @@ package osutil
 
 import (
 	"bytes"
-	"commander/src/constant"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -231,15 +230,11 @@ func (c *Copy) getCommonPath(path string) string {
 }
 
 func (c *CopyOptions) getDirectoryMode() os.FileMode {
-	if c.DirectoryMode == nil {
-		return constant.DefaultDirPermission
-	}
+
 	return *c.DirectoryMode
 }
 
 func (c *CopyOptions) getFileMode() os.FileMode {
-	if c.FileMode == nil {
-		return constant.DefaultFilePermission
-	}
+
 	return *c.FileMode
 }

@@ -56,11 +56,19 @@ type Create struct {
 	Directories []string `yaml:"directory"`
 }
 
+type Timer struct {
+	Cron         string `yaml:"cron"`
+	Milliseconds int    `yaml:"milliseconds"`
+	Minutes      int    `yaml:"minutes"`
+	MaxRetries   int    `yaml:"max_retries"` // -1 for infinite
+}
+
 type On struct {
 	Change Change `yaml:"change"`
 	Save   Change `yaml:"save"`
 	Delete Change `yaml:"delete"`
 	Create Create `yaml:"create"`
+	Timer  Timer  `yaml:"timer"`
 }
 
 type Command struct {
